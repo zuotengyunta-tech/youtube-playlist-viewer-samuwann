@@ -1,93 +1,67 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8" />
-  <title>軽量YouTube再生リスト</title>
-  <style>
-    body { font-family: sans-serif; }
-    .video-item { cursor: pointer; margin-bottom: 24px; }
-    .video-item img { max-width: 100%; display: block; }
-    iframe { width: 100%; max-width: 560px; height: 315px; }
-  </style>
-</head>
-<body>
+<!doctype html><meta charset="utf-8">
+<title>マキシマム</title>
+<style>
+  body{font:16px/1.5 system-ui;margin:20px;background:#fff}
+  #out{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-top:16px}
+  .card{border:1px solid #ddd;border-radius:8px;overflow:hidden;background:#fafafa;cursor:pointer;position:relative}
+  .card img{width:100%;display:block}
+  .card h3{font-size:14px;margin:6px;line-height:1.3}
+</style>
 
-<h1>動画一覧（クリックで再生）</h1>
-<div id="videos">読み込み中...</div>
+<p>キーワード: <input id=q value="添い寝ラジオ" size=20 readonly>
+ 件数:<input id=n type=number value=6 min=1 max=20>
+ <button id=go>検索</button></p>
+
+<div id=out></div>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
+const FIXED_KEY = "AIzaSyAxk1YpQSe-qDtFUSUmnjnduanag41Mlyk"; // ← 固定APIキー
+const FIXED_QUERY = "添い寝ラジオ";                          // ← 固定検索ワード
 
-  // ★★★★★ ここだけ自分のAPIキーに置き換え ★★★★★
-  const API_KEY = "AIzaSyAxk1YpQSe-qDtFUSUmnjnduanag41Mlyk";
-  // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+async function run(){
+  const q = FIXED_QUERY;
+  const n = Math.min(20, Math.max(1, parseInt(nEl.value||"6",10)));
 
-  const PLAYLIST_ID = "PLsHj_P-wUyYnbIgioZx3iat9EzihpACzw";
-  const container = document.getElementById("videos");
+  // 表示も固定に戻す
+  qEl.value = q;
 
-  async function fetchAll(pageToken = null, list = []) {
-    let url =
-      "https://www.googleapis.com/youtube/v3/playlistItems" +
-      "?part=snippet" +
-      "&maxResults=50" +
-      `&playlistId=${PLAYLIST_ID}` +
-      `&key=${API_KEY}`;
+  out.textContent = "読み込み中...";
+  const u = new URL("https://www.googleapis.com/youtube/v3/search");
+  u.search = new URLSearchParams({
+    part: "snippet", q, order: "date", type: "video",
+    maxResults: String(n), key: FIXED_KEY
+  });
 
-    if (pageToken) url += `&pageToken=${pageToken}`;
+  try{
+    const r  = await fetch(u);
+    const js = await r.json().catch(()=> ({}));
+    if(!r.ok){
+      out.textContent = "取得失敗: " + (js?.error?.message || `${r.status} ${r.statusText}`);
+      return;
+    }
+    if(!js.items?.length){ out.textContent = "動画なし"; return; }
 
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
-
-    const data = await res.json();
-    if (data.items) list.push(...data.items);
-
-    return data.nextPageToken
-      ? fetchAll(data.nextPageToken, list)
-      : list;
-  }
-
-  fetchAll()
-    .then(items => {
-      container.innerHTML = "";
-
-      if (!items.length) {
-        container.textContent = "動画が見つかりませんでした。";
-        return;
-      }
-
-      items.forEach(item => {
-        const snip = item.snippet;
-        if (!snip || !snip.resourceId || !snip.resourceId.videoId) return;
-
-        const div = document.createElement("div");
-        div.className = "video-item";
-
-        div.innerHTML = `
-          <img src="${snip.thumbnails.medium.url}">
-          <p>${snip.title}</p>
-        `;
-
-        div.onclick = () => {
-          div.innerHTML = `
-            <iframe
-              src="https://www.youtube.com/embed/${snip.resourceId.videoId}?rel=0"
-              frameborder="0"
-              allowfullscreen
-              loading="lazy">
-            </iframe>
-          `;
-        };
-
-        container.appendChild(div);
-      });
-    })
-    .catch(err => {
-      console.error(err);
-      container.textContent = "APIエラーが発生しました。";
+    out.innerHTML = "";
+    js.items.forEach(v=>{
+      const id=v.id.videoId, sn=v.snippet;
+      const card=document.createElement("div");
+      card.className="card";
+      card.innerHTML=`<img src="${sn.thumbnails.medium.url}" alt=""><h3>${sn.title}</h3>`;
+      card.onclick=()=>{
+        card.innerHTML=`<iframe width="100%" height="200"
+          src="https://www.youtube.com/embed/${id}?autoplay=1"
+          frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+      };
+      out.appendChild(card);
     });
+  }catch(e){
+    out.textContent = "取得失敗: " + e.message;
+  }
+}
 
-});
+const qEl = document.getElementById("q");
+const nEl = document.getElementById("n");
+const out = document.getElementById("out");
+
+document.getElementById("go").onclick = run;
 </script>
-
-</body>
-</html>
