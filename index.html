@@ -18,21 +18,15 @@
 <script>
 document.addEventListener("DOMContentLoaded", () => {
 
-  //AIzaSyAxk1YpQSe-qDtFUSUmnjnduanag41Mlyk
-  const API_KEY = "（設定済み）";
-  const PLAYLIST_ID = "PLsHj_P-wUyYnbIgioZx3iat9EzihpACzw";
+  // ★★★ ここだけ変更 ★★★
+  // Cloudflare Workers のURL
+  const API_ENDPOINT = "https://YOUR-WORKER-NAME.workers.dev";
 
   const container = document.getElementById("videos");
 
   async function fetchAll(pageToken = null, list = []) {
-    let url =
-      "https://www.googleapis.com/youtube/v3/playlistItems" +
-      "?part=snippet" +
-      "&maxResults=50" +
-      `&playlistId=${PLAYLIST_ID}` +
-      `&key=${API_KEY}`;
-
-    if (pageToken) url += `&pageToken=${pageToken}`;
+    let url = API_ENDPOINT;
+    if (pageToken) url += `?pageToken=${pageToken}`;
 
     const res = await fetch(url);
     if (!res.ok) throw new Error("HTTP " + res.status);
