@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>軽量YouTube再生リスト</title>
   <style>
     body { font-family: sans-serif; }
@@ -18,15 +18,22 @@
 <script>
 document.addEventListener("DOMContentLoaded", () => {
 
-  // ★★★ ここだけ変更 ★★★
-  // Cloudflare Workers のURL
-  const API_ENDPOINT = "https://YOUR-WORKER-NAME.workers.dev";
+  // ★★★★★ ここだけ自分のAPIキーに置き換え ★★★★★
+  const API_KEY = "AIzaSyAxk1YpQSe-qDtFUSUmnjnduanag41Mlyk";
+  // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
+  const PLAYLIST_ID = "PLsHj_P-wUyYnbIgioZx3iat9EzihpACzw";
   const container = document.getElementById("videos");
 
   async function fetchAll(pageToken = null, list = []) {
-    let url = API_ENDPOINT;
-    if (pageToken) url += `?pageToken=${pageToken}`;
+    let url =
+      "https://www.googleapis.com/youtube/v3/playlistItems" +
+      "?part=snippet" +
+      "&maxResults=50" +
+      `&playlistId=${PLAYLIST_ID}` +
+      `&key=${API_KEY}`;
+
+    if (pageToken) url += `&pageToken=${pageToken}`;
 
     const res = await fetch(url);
     if (!res.ok) throw new Error("HTTP " + res.status);
@@ -50,7 +57,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       items.forEach(item => {
         const snip = item.snippet;
-        if (!snip?.resourceId?.videoId) return;
+        if (!snip || !snip.resourceId || !snip.resourceId.videoId) return;
 
         const div = document.createElement("div");
         div.className = "video-item";
