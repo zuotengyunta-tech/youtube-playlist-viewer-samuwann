@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <title>軽量動画リスト</title>
   <style>
-    body { font-family: sans-serif; }
     .video-item { cursor: pointer; margin-bottom: 20px; }
     .video-item img { max-width: 100%; display: block; }
     iframe { width: 100%; max-width: 560px; height: 315px; }
@@ -15,115 +14,69 @@
   <div id="videos">読み込み中...</div>
 
   <script>
-    const apiKey = "AIzaSyAxk1YpQSe-qDtFUSUmnjnduanag41Mlyk";
-    const playlistId = "PLsHj_P-wUyYnbIgioZx3iat9EzihpACzw";
-    const container = document.getElementById("videos");
+    document.addEventListener("DOMContentLoaded", function () {
 
-    // ISO8601 duration → 秒へ変換
-    function parseDuration(duration) {
-      const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
-      const hours = parseInt(match?.[1]) || 0;
-      const minutes = parseInt(match?.[2]) || 0;
-      const seconds = parseInt(match?.[3]) || 0;
-      return hours * 3600 + minutes * 60 + seconds;
-    }
+      const apiKey = "あなたのAPIキー";
+      const playlistId = "PLsHj_P-wUyYnbIgioZx3iat9EzihpACzw";
+      const container = document.getElementById("videos");
 
-    // プレイリスト全取得
-    async function fetchAllVideos() {
-      let allItems = [];
-      let pageToken = "";
+      async function fetchAllVideos(pageToken = "", allItems = []) {
+        const url =
+          `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet` +
+          `&maxResults=50` +
+          `&playlistId=${playlistId}` +
+          `&key=${apiKey}` +
+          `&pageToken=${pageToken}`;
 
-      while (true) {
-        const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${playlistId}&key=${apiKey}&pageToken=${pageToken}`;
         const res = await fetch(url);
         const data = await res.json();
 
-        if (data.error) throw new Error(JSON.stringify(data.error));
+        if (data.items) allItems = allItems.concat(data.items);
+        if (data.nextPageToken)
+          return fetchAllVideos(data.nextPageToken, allItems);
 
-        allItems = allItems.concat(data.items);
-
-        if (!data.nextPageToken) break;
-        pageToken = data.nextPageToken;
+        return allItems;
       }
 
-      return allItems;
-    }
+      fetchAllVideos()
+        .then(items => {
+          container.innerHTML = "";
 
-    // 50件ずつ分割してduration取得
-    async function getDurations(videoIds) {
-      const durationMap = {};
+          if (!items.length) {
+            container.innerText = "動画が見つかりませんでした。";
+            return;
+          }
 
-      for (let i = 0; i < videoIds.length; i += 50) {
-        const chunk = videoIds.slice(i, i + 50);
-        const url = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${chunk.join(",")}&key=${apiKey}`;
-        const res = await fetch(url);
-        const data = await res.json();
+          items.forEach(item => {
+            if (!item.snippet.resourceId.videoId) return;
 
-        if (data.error) throw new Error(JSON.stringify(data.error));
+            const title = item.snippet.title;
+            const videoId = item.snippet.resourceId.videoId;
+            const thumbnail = item.snippet.thumbnails.medium.url;
 
-        data.items.forEach(v => {
-          durationMap[v.id] = parseDuration(v.contentDetails.duration);
-        });
-      }
+            const div = document.createElement("div");
+            div.className = "video-item";
 
-      return durationMap;
-    }
-
-    async function init() {
-      try {
-        const items = await fetchAllVideos();
-
-        if (!items.length) {
-          container.innerText = "動画が見つかりませんでした。";
-          return;
-        }
-
-        const videoIds = items.map(item => item.snippet.resourceId.videoId);
-        const durationMap = await getDurations(videoIds);
-
-        container.innerHTML = "";
-
-        items.forEach(item => {
-          const title = item.snippet.title;
-          const videoId = item.snippet.resourceId.videoId;
-          const thumbnail = item.snippet.thumbnails.medium.url;
-
-          // 🔥 60秒以下は除外（Shorts判定）
-          if (!durationMap[videoId] || durationMap[videoId] <= 60) return;
-
-          const div = document.createElement("div");
-          div.className = "video-item";
-
-          div.innerHTML = `
-            <img src="${thumbnail}" alt="${title}" />
-            <p>${title}</p>
-          `;
-
-          div.onclick = () => {
             div.innerHTML = `
-              <iframe
-                src="https://www.youtube.com/embed/${videoId}?rel=0"
-                frameborder="0"
-                allowfullscreen
-                loading="lazy">
-              </iframe>
+              <img src="${thumbnail}" alt="${title}">
+              <p>${title}</p>
             `;
-          };
 
-          container.appendChild(div);
+            div.onclick = () => {
+              div.innerHTML =
+                `<iframe src="https://www.youtube.com/embed/${videoId}?rel=0"`
+                + ` frameborder="0" allowfullscreen loading="lazy"></iframe>`;
+            };
+
+            container.appendChild(div);
+          });
+        })
+        .catch(err => {
+          container.innerText = "APIエラーが発生しました。";
+          console.error(err);
         });
 
-        if (!container.innerHTML.trim()) {
-          container.innerText = "通常動画が見つかりませんでした（Shortsのみの可能性）。";
-        }
-
-      } catch (err) {
-        console.error(err);
-        container.innerText = "APIエラーが発生しました。Consoleを確認してください。";
-      }
-    }
-
-    init();
+    });
   </script>
 </body>
 </html>
