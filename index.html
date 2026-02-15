@@ -1,82 +1,92 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <title>軽量動画リスト</title>
+  <meta charset="UTF-8">
+  <title>軽量YouTube再生リスト</title>
   <style>
-    .video-item { cursor: pointer; margin-bottom: 20px; }
+    body { font-family: sans-serif; }
+    .video-item { cursor: pointer; margin-bottom: 24px; }
     .video-item img { max-width: 100%; display: block; }
     iframe { width: 100%; max-width: 560px; height: 315px; }
   </style>
 </head>
 <body>
-  <h1>動画一覧（クリックで再生）</h1>
-  <div id="videos">読み込み中...</div>
 
-  <script>
-    document.addEventListener("DOMContentLoaded", function () {
+<h1>動画一覧（クリックで再生）</h1>
+<div id="videos">読み込み中...</div>
 
-      const apiKey = "あなたのAPIキー";
-      const playlistId = "PLsHj_P-wUyYnbIgioZx3iat9EzihpACzw";
-      const container = document.getElementById("videos");
+<script>
+document.addEventListener("DOMContentLoaded", () => {
 
-      async function fetchAllVideos(pageToken = "", allItems = []) {
-        const url =
-          `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet` +
-          `&maxResults=50` +
-          `&playlistId=${playlistId}` +
-          `&key=${apiKey}` +
-          `&pageToken=${pageToken}`;
+  // 🔐 ここにあなたのAPIキー（すでに設定済み想定）
+  const API_KEY = "（設定済み）";
+  const PLAYLIST_ID = "PLsHj_P-wUyYnbIgioZx3iat9EzihpACzw";
 
-        const res = await fetch(url);
-        const data = await res.json();
+  const container = document.getElementById("videos");
 
-        if (data.items) allItems = allItems.concat(data.items);
-        if (data.nextPageToken)
-          return fetchAllVideos(data.nextPageToken, allItems);
+  async function fetchAll(pageToken = null, list = []) {
+    let url =
+      "https://www.googleapis.com/youtube/v3/playlistItems" +
+      "?part=snippet" +
+      "&maxResults=50" +
+      `&playlistId=${PLAYLIST_ID}` +
+      `&key=${API_KEY}`;
 
-        return allItems;
+    if (pageToken) url += `&pageToken=${pageToken}`;
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+
+    const data = await res.json();
+    if (data.items) list.push(...data.items);
+
+    return data.nextPageToken
+      ? fetchAll(data.nextPageToken, list)
+      : list;
+  }
+
+  fetchAll()
+    .then(items => {
+      container.innerHTML = "";
+
+      if (!items.length) {
+        container.textContent = "動画が見つかりませんでした。";
+        return;
       }
 
-      fetchAllVideos()
-        .then(items => {
-          container.innerHTML = "";
+      items.forEach(item => {
+        const snip = item.snippet;
+        if (!snip?.resourceId?.videoId) return;
 
-          if (!items.length) {
-            container.innerText = "動画が見つかりませんでした。";
-            return;
-          }
+        const div = document.createElement("div");
+        div.className = "video-item";
 
-          items.forEach(item => {
-            if (!item.snippet.resourceId.videoId) return;
+        div.innerHTML = `
+          <img src="${snip.thumbnails.medium.url}">
+          <p>${snip.title}</p>
+        `;
 
-            const title = item.snippet.title;
-            const videoId = item.snippet.resourceId.videoId;
-            const thumbnail = item.snippet.thumbnails.medium.url;
+        div.onclick = () => {
+          div.innerHTML = `
+            <iframe
+              src="https://www.youtube.com/embed/${snip.resourceId.videoId}?rel=0"
+              frameborder="0"
+              allowfullscreen
+              loading="lazy">
+            </iframe>
+          `;
+        };
 
-            const div = document.createElement("div");
-            div.className = "video-item";
-
-            div.innerHTML = `
-              <img src="${thumbnail}" alt="${title}">
-              <p>${title}</p>
-            `;
-
-            div.onclick = () => {
-              div.innerHTML =
-                `<iframe src="https://www.youtube.com/embed/${videoId}?rel=0"`
-                + ` frameborder="0" allowfullscreen loading="lazy"></iframe>`;
-            };
-
-            container.appendChild(div);
-          });
-        })
-        .catch(err => {
-          container.innerText = "APIエラーが発生しました。";
-          console.error(err);
-        });
-
+        container.appendChild(div);
+      });
+    })
+    .catch(err => {
+      console.error(err);
+      container.textContent = "APIエラーが発生しました。";
     });
-  </script>
+
+});
+</script>
+
 </body>
 </html>
