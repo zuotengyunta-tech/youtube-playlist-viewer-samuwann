@@ -1,67 +1,104 @@
-<!doctype html><meta charset="utf-8">
+<!doctype html>
+<meta charset="utf-8">
 <title>マキシマム</title>
+
 <style>
   body{font:16px/1.5 system-ui;margin:20px;background:#fff}
   #out{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-top:16px}
-  .card{border:1px solid #ddd;border-radius:8px;overflow:hidden;background:#fafafa;cursor:pointer;position:relative}
+  .card{border:1px solid #ddd;border-radius:8px;overflow:hidden;background:#fafafa;cursor:pointer}
   .card img{width:100%;display:block}
   .card h3{font-size:14px;margin:6px;line-height:1.3}
 </style>
 
-<p>キーワード: <input id=q value="添い寝ラジオ" size=20 readonly>
- 件数:<input id=n type=number value=6 min=1 max=20>
- <button id=go>検索</button></p>
+<p>
+  星野 うみ《添い寝ラジオ》｜新着動画（60秒以下除外・最大10件）
+  <button id="go">表示</button>
+</p>
 
-<div id=out></div>
+<div id="out"></div>
 
 <script>
-const FIXED_KEY = "AIzaSyAxk1YpQSe-qDtFUSUmnjnduanag41Mlyk"; // ← 固定APIキー
-const FIXED_QUERY = "添い寝ラジオ";                          // ← 固定検索ワード
+const API_KEY     = "AIzaSyAxk1YpQSe-qDtFUSUmnjnduanag41Mlyk";
+const CHANNEL_ID  = "UCraomQFObsdXZzqiiEkzGyA"; // ← ここが差し替え済み
+const MAX_RESULTS = 10;
 
-async function run(){
-  const q = FIXED_QUERY;
-  const n = Math.min(20, Math.max(1, parseInt(nEl.value||"6",10)));
-
-  // 表示も固定に戻す
-  qEl.value = q;
-
-  out.textContent = "読み込み中...";
-  const u = new URL("https://www.googleapis.com/youtube/v3/search");
-  u.search = new URLSearchParams({
-    part: "snippet", q, order: "date", type: "video",
-    maxResults: String(n), key: FIXED_KEY
-  });
-
-  try{
-    const r  = await fetch(u);
-    const js = await r.json().catch(()=> ({}));
-    if(!r.ok){
-      out.textContent = "取得失敗: " + (js?.error?.message || `${r.status} ${r.statusText}`);
-      return;
-    }
-    if(!js.items?.length){ out.textContent = "動画なし"; return; }
-
-    out.innerHTML = "";
-    js.items.forEach(v=>{
-      const id=v.id.videoId, sn=v.snippet;
-      const card=document.createElement("div");
-      card.className="card";
-      card.innerHTML=`<img src="${sn.thumbnails.medium.url}" alt=""><h3>${sn.title}</h3>`;
-      card.onclick=()=>{
-        card.innerHTML=`<iframe width="100%" height="200"
-          src="https://www.youtube.com/embed/${id}?autoplay=1"
-          frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
-      };
-      out.appendChild(card);
-    });
-  }catch(e){
-    out.textContent = "取得失敗: " + e.message;
-  }
+/* ISO8601 → 秒 */
+function isoToSeconds(iso){
+  const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  return (m[1]?+m[1]*3600:0) + (m[2]?+m[2]*60:0) + (m[3]?+m[3]:0);
 }
 
-const qEl = document.getElementById("q");
-const nEl = document.getElementById("n");
-const out = document.getElementById("out");
+async function run(){
+  out.textContent = "読み込み中...";
+
+  // ① チャンネル新着取得
+  const searchUrl = new URL("https://www.googleapis.com/youtube/v3/search");
+  searchUrl.search = new URLSearchParams({
+    part: "snippet",
+    channelId: CHANNEL_ID,
+    order: "date",
+    type: "video",
+    maxResults: MAX_RESULTS,
+    key: API_KEY
+  });
+
+  const sRes = await fetch(searchUrl);
+  const sJson = await sRes.json();
+
+  if(!sRes.ok || !sJson.items?.length){
+    out.textContent = "動画なし";
+    return;
+  }
+
+  // ② 動画ID一覧
+  const ids = sJson.items.map(v=>v.id.videoId).join(",");
+
+  // ③ videos APIで長さ取得
+  const vUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
+  vUrl.search = new URLSearchParams({
+    part: "contentDetails",
+    id: ids,
+    key: API_KEY
+  });
+
+  const vRes = await fetch(vUrl);
+  const vJson = await vRes.json();
+
+  const durationMap = {};
+  vJson.items.forEach(v=>{
+    durationMap[v.id] = isoToSeconds(v.contentDetails.duration);
+  });
+
+  // ④ 60秒超のみ表示
+  out.innerHTML = "";
+  sJson.items.forEach(item=>{
+    const id = item.id.videoId;
+    if((durationMap[id] || 0) <= 60) return; // ショート除外
+
+    const sn = item.snippet;
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <img src="${sn.thumbnails.medium.url}">
+      <h3>${sn.title}</h3>
+    `;
+    card.onclick = ()=>{
+      card.innerHTML = `
+        <iframe width="100%" height="200"
+          src="https://www.youtube.com/embed/${id}?autoplay=1"
+          frameborder="0"
+          allow="autoplay; encrypted-media"
+          allowfullscreen>
+        </iframe>
+      `;
+    };
+    out.appendChild(card);
+  });
+
+  if(!out.children.length){
+    out.textContent = "60秒超の動画がありません";
+  }
+}
 
 document.getElementById("go").onclick = run;
 </script>
